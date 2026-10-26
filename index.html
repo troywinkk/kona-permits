@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Permit Tracker</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #6a7282; --line: #e3e6eb;
+    --accent: #0f6e8c; --accent-soft: #e2f1f6;
+    --green: #1f8a4c; --green-bg: #e3f4ea; --blue: #2b62c4; --blue-bg: #e6eefb;
+    --amber: #a8640a; --amber-bg: #fcf0dc; --red: #b8352b; --red-bg: #fbe6e4; --gray: #5d6573; --gray-bg: #eceef1;
+    --shadow: 0 1px 2px rgba(20,30,50,.06), 0 2px 8px rgba(20,30,50,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151b; --panel: #1b1f27; --text: #e6e9ef; --muted: #98a0ae; --line: #2c323d;
+      --accent: #5bbbd8; --accent-soft: #1d3540;
+      --green: #6fd29a; --green-bg: #183326; --blue: #8cb0f2; --blue-bg: #1c2a44;
+      --amber: #f0b45e; --amber-bg: #3a2c15; --red: #f28b82; --red-bg: #3d1f1d; --gray: #a7afbc; --gray-bg: #272c35;
+      --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Segoe UI", system-ui, sans-serif; }
+  header { position: sticky; top: 0; z-index: 1000; background: var(--panel); border-bottom: 1px solid var(--line); padding: 14px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 19px; font-weight: 650; }
+  header .sub { color: var(--muted); font-size: 13px; }
+  .live { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); }
+  .dot.stale { background: var(--amber); }
+  .dot.err { background: var(--red); }
+  .spinner { width: 13px; height: 13px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  main { max-width: 1180px; margin: 0 auto; padding: 20px 24px 48px; }
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+  .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; box-shadow: var(--shadow); cursor: pointer; text-align: left; color: inherit; font: inherit; }
+  .tile:hover { border-color: var(--accent); }
+  .tile .n { font-size: 26px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .tile .l { color: var(--muted); font-size: 12.5px; }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 14px; }
+  .tab { background: none; border: 0; padding: 9px 14px; font: inherit; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab.on { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .filters input, .filters select { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; }
+  .filters input { flex: 1; min-width: 200px; }
+  .count { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
+  .list { display: flex; flex-direction: column; gap: 8px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); }
+  .card summary { list-style: none; cursor: pointer; padding: 12px 16px; display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; }
+  .card summary::-webkit-details-marker { display: none; }
+  .card .title { font-weight: 600; }
+  .card .meta { color: var(--muted); font-size: 13px; grid-column: 1; }
+  .card .right { grid-row: 1 / span 2; grid-column: 2; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+  .card .dist { color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  .card .body { padding: 0 16px 14px; border-top: 1px solid var(--line); margin-top: 2px; padding-top: 12px; }
+  .card .desc { white-space: pre-wrap; margin: 0 0 10px; }
+  .card dl { display: grid; grid-template-columns: max-content 1fr; gap: 3px 14px; margin: 0 0 10px; font-size: 13px; }
+  .card dt { color: var(--muted); }
+  .card dd { margin: 0; }
+  .card a { color: var(--accent); }
+  .badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .g-green { color: var(--green); background: var(--green-bg); }
+  .g-blue { color: var(--blue); background: var(--blue-bg); }
+  .g-amber { color: var(--amber); background: var(--amber-bg); }
+  .g-red { color: var(--red); background: var(--red-bg); }
+  .g-gray { color: var(--gray); background: var(--gray-bg); }
+  .tag { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .03em; padding: 1px 6px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); margin-right: 6px; vertical-align: 1px; }
+  .change { font-size: 13px; margin-top: 2px; }
+  .change .arrow { color: var(--muted); margin: 0 4px; }
+  .history { margin: 0; padding-left: 18px; font-size: 13px; }
+  .day { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 14px 0 6px; }
+  .day:first-child { margin-top: 0; }
+  #map { height: 620px; border-radius: 10px; border: 1px solid var(--line); }
+  .empty { color: var(--muted); padding: 30px; text-align: center; background: var(--panel); border: 1px dashed var(--line); border-radius: 10px; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); margin-bottom: 8px; }
+  .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; background: var(--c); }
+  [hidden] { display: none !important; }
+  @media (max-width: 760px) {
+    header, main { padding-left: 16px; padding-right: 16px; }
+    .tiles { grid-template-columns: repeat(2, 1fr); }
+    #map { height: 460px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Permits near you</h1>
+    <div class="sub" id="sub"></div>
+  </div>
+  <div class="live" id="live"></div>
+</header>
+
+<main>
+  <section class="tiles">
+    <button class="tile" data-go="activity"><div class="n" id="t-new">–</div><div class="l">New permits, last 7 days</div></button>
+    <button class="tile" data-go="activity"><div class="n" id="t-chg">–</div><div class="l">Status changes, last 7 days</div></button>
+    <button class="tile" data-go="all" data-status="open"><div class="n" id="t-open">–</div><div class="l">Still in progress</div></button>
+    <button class="tile" data-go="all"><div class="n" id="t-all">–</div><div class="l">Tracked within <span id="t-rad"></span> mi</div></button>
+  </section>
+
+  <nav class="tabs">
+    <button class="tab on" data-tab="activity">Recent activity</button>
+    <button class="tab" data-tab="all">All permits</button>
+    <button class="tab" data-tab="map">Map</button>
+  </nav>
+
+  <div class="filters">
+    <input id="q" type="search" placeholder="Search address, permit #, description…">
+    <select id="f-kind">
+      <option value="">All types</option>
+      <option value="newhome">New homes</option>
+      <option value="commercial">Commercial</option>
+      <option value="addition">Additions &amp; alterations</option>
+      <option value="solar">Solar &amp; water heaters</option>
+      <option value="electrical">Electrical / plumbing only</option>
+      <option value="site">Grading, pools &amp; site work</option>
+      <option value="other">Other</option>
+    </select>
+    <select id="f-status">
+      <option value="">Any status</option>
+      <option value="open">In progress</option>
+      <option value="action">Waiting on applicant</option>
+      <option value="issued">Issued / approved</option>
+      <option value="closed">Completed / closed</option>
+    </select>
+    <select id="f-dist">
+      <option value="">Any distance</option>
+      <option value="1">Within 1 mi</option>
+      <option value="2">Within 2 mi</option>
+      <option value="5">Within 5 mi</option>
+    </select>
+  </div>
+
+  <section id="v-activity"></section>
+  <section id="v-all" hidden></section>
+  <section id="v-map" hidden>
+    <div class="legend">
+      <span style="--c:var(--blue)">In review</span><span style="--c:var(--amber)">Waiting on applicant</span>
+      <span style="--c:var(--green)">Issued</span><span style="--c:var(--gray)">Completed</span><span style="--c:var(--red)">Cancelled / expired</span>
+    </div>
+    <div id="map"></div>
+  </section>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const DAY = 864e5;
+let DATA = null, view = 'activity', map = null, layer = null, mapFit = false;
+
+// ---------- classification ----------
+function statusGroup(s) {
+  s = s || '';
+  if (/cancel|expire|denied|void|revoked|withdraw/i.test(s)) return 'red';
+  if (/complete|final|closed/i.test(s)) return 'gray';
+  if (/issued|ready to issue|approved/i.test(s)) return 'green';
+  if (/resubmit|incomplete|pending.*payment|fee payment|issue\(s\)|hold/i.test(s)) return 'amber';
+  return 'blue';
+}
+const groupMatches = { open: g => g === 'blue' || g === 'amber', action: g => g === 'amber', issued: g => g === 'green', closed: g => g === 'gray' || g === 'red' };
+function kind(t) {
+  t = t || '';
+  if (/new construction/i.test(t)) return /non-residential|commercial/i.test(t) ? 'commercial' : 'newhome';
+  if (/pv|solar|water heater/i.test(t)) return 'solar';
+  if (/electrical|plumbing/i.test(t)) return 'electrical';
+  if (/non-residential|commercial/i.test(t)) return 'commercial';
+  if (/addition|alteration|renovation|repair/i.test(t)) return 'addition';
+  if (/grading|pool|spa|jacuzzi|fence|wall|right of way|demolition|grubbing/i.test(t)) return 'site';
+  return 'other';
+}
+
+// ---------- formatting ----------
+const fmtDate = d => d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+function ago(d) {
+  const m = Math.round((Date.now() - new Date(d)) / 6e4);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h} hr ago`;
+  return `${Math.round(h / 24)} days ago`;
+}
+function dayLabel(d) {
+  const x = new Date(d); x.setHours(0, 0, 0, 0);
+  const t = new Date(); t.setHours(0, 0, 0, 0);
+  const diff = Math.round((t - x) / DAY);
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  return x.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+}
+const badge = s => `<span class="badge g-${statusGroup(s)}">${esc(s)}</span>`;
+const prettyAddr = a => esc((a || '').replace(/\s+HI$/, '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase()));
+
+// Status-change events, from recorded history (or the single previousStatus older runs kept)
+function changesOf(p) {
+  if (p.history && p.history.length) return p.history;
+  if (p.previousStatus) return [{ from: p.previousStatus, to: p.status, at: p.lastChanged || DATA.lastRun }];
+  return [];
+}
+
+function card(p, note) {
+  const ch = changesOf(p);
+  return `<details class="card"><summary>
+      <div class="title">${note || ''}${esc(p.type)}</div>
+      <div class="right">${badge(p.status)}<span class="dist">${(+p.miles).toFixed(1)} mi</span></div>
+      <div class="meta">${prettyAddr(p.address)} · Applied ${fmtDate(p.applied)}</div>
+    </summary>
+    <div class="body">
+      ${p.description ? `<p class="desc">${esc(p.description)}</p>` : ''}
+      <dl>
+        <dt>Permit #</dt><dd>${esc(p.number)}</dd>
+        <dt>Applied</dt><dd>${fmtDate(p.applied)}</dd>
+        <dt>Issued</dt><dd>${fmtDate(p.issued)}</dd>
+        <dt>Parcel (TMK)</dt><dd>${esc(p.tmk) || '—'}</dd>
+      </dl>
+      ${ch.length ? `<div style="font-size:13px;color:var(--muted);margin-bottom:4px">Status history</div><ul class="history">${ch.map(c => `<li>${fmtDate(c.at)}: ${esc(c.from)} → <b>${esc(c.to)}</b></li>`).join('')}</ul><br>` : ''}
+      <a href="${esc(p.url)}" target="_blank" rel="noopener">Open on county EPIC site ↗</a>
+    </div></details>`;
+}
+
+// ---------- filtering ----------
+function filtered() {
+  const q = $('#q').value.trim().toLowerCase(), k = $('#f-kind').value, st = $('#f-status').value, d = +$('#f-dist').value;
+  return DATA.permits.filter(p =>
+    (!q || [p.address, p.number, p.description, p.type, p.status].join(' ').toLowerCase().includes(q)) &&
+    (!k || kind(p.type) === k) &&
+    (!st || groupMatches[st](statusGroup(p.status))) &&
+    (!d || p.miles <= d));
+}
+
+// ---------- views ----------
+function renderActivity(list) {
+  const cutoff = Date.now() - 14 * DAY;
+  const events = [];
+  for (const p of list) {
+    if (p.firstSeen && new Date(p.firstSeen) >= cutoff) events.push({ at: p.firstSeen, p, note: '<span class="tag">NEW</span>' });
+    for (const c of changesOf(p)) if (new Date(c.at) >= cutoff)
+      events.push({ at: c.at, p, note: `<span class="tag">UPDATE</span>`, change: c });
+  }
+  events.sort((a, b) => new Date(b.at) - new Date(a.at));
+  if (!events.length) { $('#v-activity').innerHTML = '<div class="empty">No new permits or status changes in the last 14 days match these filters.</div>'; return; }
+  let html = `<p class="count">${events.length} events in the last 14 days</p>`, lastDay = '';
+  for (const e of events) {
+    const dl = dayLabel(e.at);
+    if (dl !== lastDay) { html += `<div class="day">${dl}</div>`; lastDay = dl; }
+    let c = card(e.p, e.note);
+    if (e.change) c = c.replace('<div class="meta">', `<div class="change">${badge(e.change.from)}<span class="arrow">→</span>${badge(e.change.to)}</div><div class="meta">`);
+    html += c;
+  }
+  $('#v-activity').innerHTML = `<div class="list">${html}</div>`;
+}
+
+function renderAll(list) {
+  const sorted = [...list].sort((a, b) => new Date(b.applied) - new Date(a.applied));
+  $('#v-all').innerHTML = sorted.length
+    ? `<p class="count">${sorted.length} permits, newest first</p><div class="list">${sorted.map(p => card(p)).join('')}</div>`
+    : '<div class="empty">No permits match these filters.</div>';
+}
+
+function renderMap(list) {
+  if (!window.L) { $('#map').innerHTML = '<div class="empty">The map needs an internet connection.</div>'; return; }
+  const css = getComputedStyle(document.documentElement);
+  const color = g => css.getPropertyValue('--' + g).trim();
+  if (!map) {
+    map = L.map('map').setView([DATA.home.lat, DATA.home.lon], 12);
+    // Esri basemaps: unlike OpenStreetMap's servers, they serve tiles to pages opened from a local file
+    const esri = name => L.tileLayer(`https://server.arcgisonline.com/ArcGIS/rest/services/${name}/MapServer/tile/{z}/{y}/{x}`,
+      { maxZoom: 19, referrerPolicy: 'no-referrer', attribution: 'Tiles © Esri' });
+    const street = esri('World_Street_Map').addTo(map);
+    L.control.layers({ Street: street, Satellite: esri('World_Imagery') }, null, { position: 'topright' }).addTo(map);
+  }
+  if (layer) layer.remove();
+  layer = L.layerGroup().addTo(map);
+  L.circle([DATA.home.lat, DATA.home.lon], { radius: DATA.radiusMiles * 1609.34, color: color('accent'), weight: 1, fill: false, dashArray: '4 4' }).addTo(layer);
+  L.marker([DATA.home.lat, DATA.home.lon], { title: 'Home' }).addTo(layer).bindPopup('<b>Home</b><br>' + esc(DATA.home.address));
+  for (const p of list) {
+    if (!p.lat) continue;
+    L.circleMarker([p.lat, p.lon], { radius: 6, color: '#fff', weight: 1, fillColor: color(statusGroup(p.status)), fillOpacity: .9 })
+      .addTo(layer)
+      .bindPopup(`<b>${esc(p.type)}</b><br>${prettyAddr(p.address)}<br>${badge(p.status)}<br>${(+p.miles).toFixed(1)} mi · applied ${fmtDate(p.applied)}<br><a href="${esc(p.url)}" target="_blank">Open on EPIC ↗</a>`);
+  }
+  setTimeout(() => map.invalidateSize(), 0);
+  if (!mapFit) { map.fitBounds(L.latLng(DATA.home.lat, DATA.home.lon).toBounds(DATA.radiusMiles * 1609.34 * 2)); mapFit = true; }
+}
+
+function renderHeader() {
+  $('#sub').textContent = `${DATA.home.address} · ${DATA.radiusMiles} mile radius · Hawaiʻi County EPIC`;
+  const last = DATA.lastRun ? new Date(DATA.lastRun) : null;
+  let html;
+  if (DATA.running) html = `<div class="spinner"></div>Checking the county for updates…`;
+  else if (DATA.lastError) html = `<div class="dot err"></div>Last check failed: ${esc(DATA.lastError)}`;
+  else html = `<div class="dot${last && Date.now() - last > 3 * 36e5 ? ' stale' : ''}"></div>Updated ${last ? ago(last) : 'never'}`;
+  $('#live').innerHTML = html;
+  $('#live').title = last ? 'Last checked ' + last.toLocaleString() : '';
+}
+
+function renderTiles() {
+  const wk = Date.now() - 7 * DAY, P = DATA.permits;
+  $('#t-new').textContent = P.filter(p => p.firstSeen && new Date(p.firstSeen) >= wk).length;
+  $('#t-chg').textContent = P.reduce((n, p) => n + changesOf(p).filter(c => new Date(c.at) >= wk).length, 0);
+  $('#t-open').textContent = P.filter(p => groupMatches.open(statusGroup(p.status))).length;
+  $('#t-all').textContent = P.length;
+  $('#t-rad').textContent = DATA.radiusMiles;
+}
+
+function render() {
+  if (!DATA) return;
+  renderHeader(); renderTiles();
+  const list = filtered();
+  // keep any expanded cards open across live refreshes
+  const open = [...document.querySelectorAll('details[open] dd')].map(d => d.textContent);
+  if (view === 'activity') renderActivity(list);
+  if (view === 'all') renderAll(list);
+  if (view === 'map') renderMap(list);
+  document.querySelectorAll('details').forEach(d => { if (open.includes(d.querySelector('dd')?.textContent)) d.open = true; });
+}
+
+function show(v) {
+  view = v;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.tab === v));
+  ['activity', 'all', 'map'].forEach(x => $('#v-' + x).hidden = x !== v);
+  render();
+}
+
+// ---------- live reload of data.js ----------
+function loadData() {
+  const s = document.createElement('script');
+  s.src = 'data.js?t=' + Date.now();
+  s.onload = () => {
+    s.remove();
+    const d = window.PERMIT_DATA;
+    if (d && (!DATA || d.generatedAt !== DATA.generatedAt)) { DATA = d; render(); }
+    else renderHeader();   // refresh the "updated X min ago" text
+  };
+  s.onerror = () => { s.remove(); if (!DATA) $('#v-activity').innerHTML = '<div class="empty">No data yet. The tracker is running its first check.</div>'; };
+  document.body.appendChild(s);
+}
+
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => show(t.dataset.tab));
+document.querySelectorAll('.tile').forEach(t => t.onclick = () => { $('#f-status').value = t.dataset.status || ''; show(t.dataset.go); });
+['#q', '#f-kind', '#f-status', '#f-dist'].forEach(s => $(s).addEventListener('input', render));
+loadData();
+setInterval(loadData, 15000);
+</script>
+</body>
+</html>
