@@ -282,8 +282,14 @@ function renderMap(list) {
       .addTo(layer)
       .bindPopup(`<b>${esc(p.type)}</b><br>${prettyAddr(p.address)}<br>${badge(p.status)}<br>${(+p.miles).toFixed(1)} mi · applied ${fmtDate(p.applied)}<br><a href="${esc(p.url)}" target="_blank">Open on EPIC ↗</a>`);
   }
-  setTimeout(() => map.invalidateSize(), 0);
-  if (!mapFit) { map.fitBounds(L.latLng(DATA.home.lat, DATA.home.lon).toBounds(DATA.radiusMiles * 1609.34 * 2)); mapFit = true; }
+  // Size and frame the map only once its tab is laid out, or it frames a zero-size box (the whole world)
+  requestAnimationFrame(() => {
+    map.invalidateSize();
+    if (!mapFit && $('#map').clientWidth > 0) {
+      map.fitBounds(L.latLng(DATA.home.lat, DATA.home.lon).toBounds(DATA.radiusMiles * 1609.34 * 2));
+      mapFit = true;
+    }
+  });
 }
 
 function renderHeader() {
