@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Permit Tracker</title>
+<title>Kona Permit Tracker</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
 <style>
   :root {
     --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #6a7282; --line: #e3e6eb;
-    --accent: #0f6e8c; --accent-soft: #e2f1f6;
+    --accent: #0f6e8c; --accent-soft: #e2f1f6; --on-accent: #ffffff;
     --green: #1f8a4c; --green-bg: #e3f4ea; --blue: #2b62c4; --blue-bg: #e6eefb;
     --amber: #a8640a; --amber-bg: #fcf0dc; --red: #b8352b; --red-bg: #fbe6e4; --gray: #5d6573; --gray-bg: #eceef1;
     --shadow: 0 1px 2px rgba(20,30,50,.06), 0 2px 8px rgba(20,30,50,.05);
@@ -16,7 +16,7 @@
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #12151b; --panel: #1b1f27; --text: #e6e9ef; --muted: #98a0ae; --line: #2c323d;
-      --accent: #5bbbd8; --accent-soft: #1d3540;
+      --accent: #5bbbd8; --accent-soft: #1d3540; --on-accent: #0d1a20;
       --green: #6fd29a; --green-bg: #183326; --blue: #8cb0f2; --blue-bg: #1c2a44;
       --amber: #f0b45e; --amber-bg: #3a2c15; --red: #f28b82; --red-bg: #3d1f1d; --gray: #a7afbc; --gray-bg: #272c35;
       --shadow: none;
@@ -42,9 +42,27 @@
   .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 14px; }
   .tab { background: none; border: 0; padding: 9px 14px; font: inherit; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
   .tab.on { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
-  .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
-  .filters input, .filters select { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; }
-  .filters input { flex: 1; min-width: 200px; }
+
+  /* filter panel */
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+  .frow { display: flex; gap: 8px 12px; align-items: center; flex-wrap: wrap; }
+  .flabel { font-size: 11.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); width: 64px; flex: none; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; min-width: 0; }
+  .chip { font: inherit; font-size: 13px; padding: 4px 11px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); color: var(--text); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+  .chip:hover { border-color: var(--accent); }
+  .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+  .chip .sw { width: 8px; height: 8px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 1.5px var(--panel); }
+  .panel input[type=search] { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; flex: 1; min-width: 180px; }
+  .btn { font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); cursor: pointer; white-space: nowrap; }
+  .btn:hover { border-color: var(--accent); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+  .center-form { display: flex; gap: 8px; flex: 1; min-width: 240px; }
+  .center-now { font-weight: 600; }
+  .hint { font-size: 12.5px; color: var(--muted); }
+  .warn { font-size: 12.5px; color: var(--amber); }
+  .linkbtn { font: inherit; font-size: 13px; background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; text-decoration: underline; }
+  .tab:focus-visible, .chip:focus-visible, .btn:focus-visible, .tile:focus-visible, .linkbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
   .count { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
   .list { display: flex; flex-direction: column; gap: 8px; }
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); }
@@ -55,7 +73,7 @@
   .card .right { grid-row: 1 / span 2; grid-column: 2; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
   .card .dist { color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
   .card .body { padding: 0 16px 14px; border-top: 1px solid var(--line); margin-top: 2px; padding-top: 12px; }
-  .card .desc { white-space: pre-wrap; margin: 0 0 10px; }
+  .card .desc { white-space: pre-wrap; margin: 0 0 10px; overflow-wrap: anywhere; }
   .card dl { display: grid; grid-template-columns: max-content 1fr; gap: 3px 14px; margin: 0 0 10px; font-size: 13px; }
   .card dt { color: var(--muted); }
   .card dd { margin: 0; }
@@ -76,18 +94,20 @@
   .empty { color: var(--muted); padding: 30px; text-align: center; background: var(--panel); border: 1px dashed var(--line); border-radius: 10px; }
   .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); margin-bottom: 8px; }
   .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; background: var(--c); }
+  .legend .ring::before { background: none; border: 2px dashed var(--c); width: 8px; height: 8px; }
   [hidden] { display: none !important; }
   @media (max-width: 760px) {
     header, main { padding-left: 16px; padding-right: 16px; }
     .tiles { grid-template-columns: repeat(2, 1fr); }
     #map { height: 460px; }
+    .flabel { width: 100%; }
   }
 </style>
 </head>
 <body>
 <header>
   <div>
-    <h1>Permits near you</h1>
+    <h1>Kona Permit Tracker</h1>
     <div class="sub" id="sub"></div>
   </div>
   <div class="live" id="live"></div>
@@ -97,8 +117,8 @@
   <section class="tiles">
     <button class="tile" data-go="activity"><div class="n" id="t-new">–</div><div class="l">New permits, last 7 days</div></button>
     <button class="tile" data-go="activity"><div class="n" id="t-chg">–</div><div class="l">Status changes, last 7 days</div></button>
-    <button class="tile" data-go="all" data-status="open"><div class="n" id="t-open">–</div><div class="l">Still in progress</div></button>
-    <button class="tile" data-go="all"><div class="n" id="t-all">–</div><div class="l">Tracked within <span id="t-rad"></span> mi</div></button>
+    <button class="tile" data-go="all" data-status="blue,amber"><div class="n" id="t-open">–</div><div class="l">Still in progress</div></button>
+    <button class="tile" data-go="all"><div class="n" id="t-all">–</div><div class="l">Permits matching your filters</div></button>
   </section>
 
   <nav class="tabs">
@@ -107,39 +127,32 @@
     <button class="tab" data-tab="map">Map</button>
   </nav>
 
-  <div class="filters">
-    <input id="q" type="search" placeholder="Search address, permit #, description…">
-    <select id="f-kind">
-      <option value="">All types</option>
-      <option value="newhome">New homes</option>
-      <option value="commercial">Commercial</option>
-      <option value="addition">Additions &amp; alterations</option>
-      <option value="solar">Solar &amp; water heaters</option>
-      <option value="electrical">Electrical / plumbing only</option>
-      <option value="site">Grading, pools &amp; site work</option>
-      <option value="other">Other</option>
-    </select>
-    <select id="f-status">
-      <option value="">Any status</option>
-      <option value="open">In progress</option>
-      <option value="action">Waiting on applicant</option>
-      <option value="issued">Issued / approved</option>
-      <option value="closed">Completed / closed</option>
-    </select>
-    <select id="f-dist">
-      <option value="">Any distance</option>
-      <option value="1">Within 1 mi</option>
-      <option value="2">Within 2 mi</option>
-      <option value="5">Within 5 mi</option>
-    </select>
-  </div>
+  <section class="panel" id="filters" aria-label="Filters">
+    <div class="frow">
+      <span class="flabel">Center</span>
+      <span class="center-now" id="center-now"></span>
+      <form class="center-form" id="center-form">
+        <input id="center-q" type="search" placeholder="Move to an address or place, e.g. 74-5587 Alapa St" aria-label="Move center to an address or place">
+        <button class="btn primary" type="submit">Move</button>
+      </form>
+      <button class="btn" id="center-home" type="button">Back to home</button>
+    </div>
+    <div class="frow"><span class="flabel"></span><span class="hint" id="center-msg">You can also drag the pin on the map to move the center.</span></div>
+    <div class="frow"><span class="flabel">Within</span><div class="chips" id="f-radius" role="group" aria-label="Distance"></div></div>
+    <div class="frow"><span class="flabel">Type</span><div class="chips" id="f-kind" role="group" aria-label="Permit type"></div></div>
+    <div class="frow"><span class="flabel">Status</span><div class="chips" id="f-status" role="group" aria-label="Status"></div></div>
+    <div class="frow"><span class="flabel">Search</span><input id="q" type="search" placeholder="Address, permit #, or a word like pool or restaurant" aria-label="Search"></div>
+    <div class="frow"><span class="flabel"></span><span class="hint" id="match"></span><button class="linkbtn" id="clear" type="button">Clear filters</button></div>
+    <div class="warn" id="cover-note" hidden></div>
+  </section>
 
   <section id="v-activity"></section>
   <section id="v-all" hidden></section>
   <section id="v-map" hidden>
     <div class="legend">
       <span style="--c:var(--blue)">In review</span><span style="--c:var(--amber)">Waiting on applicant</span>
-      <span style="--c:var(--green)">Issued</span><span style="--c:var(--gray)">Completed</span><span style="--c:var(--red)">Cancelled / expired</span>
+      <span style="--c:var(--green)">Issued / approved</span><span style="--c:var(--gray)">Completed</span><span style="--c:var(--red)">Cancelled / expired</span>
+      <span class="ring" style="--c:var(--accent)">Your search area</span><span class="ring" style="--c:var(--muted)">Where permits are collected</span>
     </div>
     <div id="map"></div>
   </section>
@@ -149,8 +162,8 @@
 <script>
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const DAY = 864e5;
-let DATA = null, view = 'activity', map = null, layer = null, mapFit = false;
+const DAY = 864e5, MI = 1609.34;
+let DATA = null, view = 'activity', map = null, layer = null, mapFitKey = '';
 
 // ---------- classification ----------
 function statusGroup(s) {
@@ -161,7 +174,6 @@ function statusGroup(s) {
   if (/resubmit|incomplete|pending.*payment|fee payment|issue\(s\)|hold/i.test(s)) return 'amber';
   return 'blue';
 }
-const groupMatches = { open: g => g === 'blue' || g === 'amber', action: g => g === 'amber', issued: g => g === 'green', closed: g => g === 'gray' || g === 'red' };
 function kind(t) {
   t = t || '';
   if (/new construction/i.test(t)) return /non-residential|commercial/i.test(t) ? 'commercial' : 'newhome';
@@ -171,6 +183,40 @@ function kind(t) {
   if (/addition|alteration|renovation|repair/i.test(t)) return 'addition';
   if (/grading|pool|spa|jacuzzi|fence|wall|right of way|demolition|grubbing/i.test(t)) return 'site';
   return 'other';
+}
+const KINDS = [['newhome', 'New homes'], ['commercial', 'Commercial'], ['addition', 'Additions & alterations'], ['solar', 'Solar & water heaters'],
+  ['electrical', 'Electrical / plumbing'], ['site', 'Grading, pools & site work'], ['other', 'Other']];
+const STATUSES = [['blue', 'In review'], ['amber', 'Waiting on applicant'], ['green', 'Issued / approved'], ['gray', 'Completed'], ['red', 'Cancelled / expired']];
+const RADII = [0.5, 1, 2, 5, 10];
+
+// ---------- filter state (also kept in the page link, so a filtered view can be shared) ----------
+const S = { center: null, radius: 10, kinds: new Set(), statuses: new Set() };
+(function readLink() {
+  try {
+    const p = new URLSearchParams(location.search);
+    const c = (p.get('c') || '').split(',').map(Number);
+    if (c.length === 2 && c.every(Number.isFinite)) S.center = { lat: c[0], lon: c[1], label: p.get('l') || 'Selected point' };
+    if (RADII.includes(+p.get('r'))) S.radius = +p.get('r');
+    (p.get('t') || '').split(',').filter(k => KINDS.some(x => x[0] === k)).forEach(k => S.kinds.add(k));
+    (p.get('s') || '').split(',').filter(k => STATUSES.some(x => x[0] === k)).forEach(k => S.statuses.add(k));
+    if (p.get('q')) $('#q').value = p.get('q');
+  } catch (e) { }
+})();
+function writeLink() {
+  const p = new URLSearchParams();
+  if (S.center && !S.center.isHome) { p.set('c', S.center.lat.toFixed(5) + ',' + S.center.lon.toFixed(5)); p.set('l', S.center.label); }
+  if (S.radius !== 10) p.set('r', S.radius);
+  if (S.kinds.size) p.set('t', [...S.kinds].join(','));
+  if (S.statuses.size) p.set('s', [...S.statuses].join(','));
+  if ($('#q').value.trim()) p.set('q', $('#q').value.trim());
+  try { history.replaceState(null, '', (p.toString() ? '?' + p : location.pathname) + location.hash); } catch (e) { }
+}
+const homeCenter = () => ({ lat: DATA.home.lat, lon: DATA.home.lon, label: DATA.home.address, isHome: true });
+
+function miles(a, b) {
+  const r = Math.PI / 180, dLat = (b.lat - a.lat) * r, dLon = (b.lon - a.lon) * r;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLon / 2) ** 2;
+  return 3958.8 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }
 
 // ---------- formatting ----------
@@ -193,6 +239,7 @@ function dayLabel(d) {
 }
 const badge = s => `<span class="badge g-${statusGroup(s)}">${esc(s)}</span>`;
 const prettyAddr = a => esc((a || '').replace(/\s+HI$/, '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase()));
+const fmtMi = d => d == null ? '—' : (d < 10 ? d.toFixed(1) : Math.round(d)) + ' mi';
 
 // Status-change events, from recorded history (or the single previousStatus older runs kept)
 function changesOf(p) {
@@ -205,7 +252,7 @@ function card(p, note) {
   const ch = changesOf(p);
   return `<details class="card"><summary>
       <div class="title">${note || ''}${esc(p.type)}</div>
-      <div class="right">${badge(p.status)}<span class="dist">${(+p.miles).toFixed(1)} mi</span></div>
+      <div class="right">${badge(p.status)}<span class="dist">${fmtMi(p.dist)}</span></div>
       <div class="meta">${prettyAddr(p.address)} · Applied ${fmtDate(p.applied)}</div>
     </summary>
     <div class="body">
@@ -223,13 +270,70 @@ function card(p, note) {
 
 // ---------- filtering ----------
 function filtered() {
-  const q = $('#q').value.trim().toLowerCase(), k = $('#f-kind').value, st = $('#f-status').value, d = +$('#f-dist').value;
-  return DATA.permits.filter(p =>
-    (!q || [p.address, p.number, p.description, p.type, p.status].join(' ').toLowerCase().includes(q)) &&
-    (!k || kind(p.type) === k) &&
-    (!st || groupMatches[st](statusGroup(p.status))) &&
-    (!d || p.miles <= d));
+  const q = $('#q').value.trim().toLowerCase();
+  return DATA.permits
+    .map(p => Object.assign({}, p, { dist: p.lat ? miles(S.center, p) : null }))
+    .filter(p =>
+      p.dist != null && p.dist <= S.radius &&
+      (!q || [p.address, p.number, p.description, p.type, p.status].join(' ').toLowerCase().includes(q)) &&
+      (!S.kinds.size || S.kinds.has(kind(p.type))) &&
+      (!S.statuses.size || S.statuses.has(statusGroup(p.status))));
 }
+
+function drawChips() {
+  const chip = (label, pressed, onclick, color) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'chip'; b.setAttribute('aria-pressed', String(pressed));
+    if (color) { const sw = document.createElement('span'); sw.className = 'sw'; sw.style.setProperty('--c', `var(--${color})`); b.append(sw); }
+    b.append(label); b.onclick = onclick;
+    return b;
+  };
+  const toggle = (set, key) => () => { set.has(key) ? set.delete(key) : set.add(key); changed(); };
+  $('#f-radius').replaceChildren(...RADII.map(r => chip(`${r} mi`, S.radius === r, () => { S.radius = r; changed(); })));
+  $('#f-kind').replaceChildren(chip('All types', !S.kinds.size, () => { S.kinds.clear(); changed(); }),
+    ...KINDS.map(([k, label]) => chip(label, S.kinds.has(k), toggle(S.kinds, k))));
+  $('#f-status').replaceChildren(chip('Any status', !S.statuses.size, () => { S.statuses.clear(); changed(); }),
+    ...STATUSES.map(([k, label]) => chip(label, S.statuses.has(k), toggle(S.statuses, k), k)));
+}
+
+function changed() { writeLink(); render(); }
+
+// ---------- moving the center ----------
+function setCenter(lat, lon, label, isHome) {
+  S.center = { lat, lon, label, isHome: !!isHome };
+  changed();
+}
+async function placeName(lat, lon) {
+  try {
+    const r = await fetch(`https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/reverseGeocode?f=json&location=${lon},${lat}`).then(r => r.json());
+    return r.address && (r.address.ShortLabel || r.address.Match_addr);
+  } catch (e) { return null; }
+}
+async function findPlace(q) {
+  const ql = q.toLowerCase();
+  // A tracked permit's address or number first, then Esri's address and place search on the Big Island
+  const hit = DATA.permits.find(p => p.lat && ((p.number || '').toLowerCase() === ql || (p.address || '').toLowerCase().includes(ql)));
+  if (hit) return { lat: hit.lat, lon: hit.lon, label: prettyAddr(hit.address).replace(/&amp;/g, '&') };
+  const url = 'https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&outSR=4326&maxLocations=1'
+    + '&searchExtent=-156.2,18.85,-154.75,20.35&location=-155.99,19.65&SingleLine=' + encodeURIComponent(/hawaii|\bhi\b/i.test(q) ? q : q + ', Hawaii');
+  const r = await fetch(url).then(r => r.json());
+  const c = (r.candidates || [])[0];
+  return c && c.score >= 80 ? { lat: c.location.y, lon: c.location.x, label: c.address.replace(/, Hawaii, \d{5}$/, '') } : null;
+}
+$('#center-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const q = $('#center-q').value.trim();
+  if (!q || !DATA) return;
+  $('#center-msg').textContent = 'Looking up that place…';
+  try {
+    const hit = await findPlace(q);
+    if (!hit) { $('#center-msg').textContent = `Couldn't find "${q}" on the Big Island. Try a street address, or drag the pin on the map.`; return; }
+    $('#center-q').value = '';
+    $('#center-msg').textContent = 'You can also drag the pin on the map to move the center.';
+    setCenter(hit.lat, hit.lon, hit.label);
+  } catch (err) { $('#center-msg').textContent = 'The address lookup is not responding. Try again, or drag the pin on the map.'; }
+});
+$('#center-home').addEventListener('click', () => { const h = homeCenter(); setCenter(h.lat, h.lon, h.label, true); });
 
 // ---------- views ----------
 function renderActivity(list) {
@@ -265,7 +369,7 @@ function renderMap(list) {
   const css = getComputedStyle(document.documentElement);
   const color = g => css.getPropertyValue('--' + g).trim();
   if (!map) {
-    map = L.map('map').setView([DATA.home.lat, DATA.home.lon], 12);
+    map = L.map('map').setView([S.center.lat, S.center.lon], 12);
     // Esri basemaps: unlike OpenStreetMap's servers, they serve tiles to pages opened from a local file
     const esri = name => L.tileLayer(`https://server.arcgisonline.com/ArcGIS/rest/services/${name}/MapServer/tile/{z}/{y}/{x}`,
       { maxZoom: 19, referrerPolicy: 'no-referrer', attribution: 'Tiles © Esri' });
@@ -274,26 +378,36 @@ function renderMap(list) {
   }
   if (layer) layer.remove();
   layer = L.layerGroup().addTo(map);
-  L.circle([DATA.home.lat, DATA.home.lon], { radius: DATA.radiusMiles * 1609.34, color: color('accent'), weight: 1, fill: false, dashArray: '4 4' }).addTo(layer);
-  L.marker([DATA.home.lat, DATA.home.lon], { title: 'Home' }).addTo(layer).bindPopup('<b>Home</b><br>' + esc(DATA.home.address));
+  // Where the tracker collects permits, then the area being searched
+  L.circle([DATA.home.lat, DATA.home.lon], { radius: DATA.radiusMiles * MI, color: color('muted'), weight: 1, fill: false, dashArray: '2 5', interactive: false }).addTo(layer);
+  L.circle([S.center.lat, S.center.lon], { radius: S.radius * MI, color: color('accent'), weight: 2, fillColor: color('accent'), fillOpacity: .05, dashArray: '6 5', interactive: false }).addTo(layer);
   for (const p of list) {
-    if (!p.lat) continue;
     L.circleMarker([p.lat, p.lon], { radius: 6, color: '#fff', weight: 1, fillColor: color(statusGroup(p.status)), fillOpacity: .9 })
       .addTo(layer)
-      .bindPopup(`<b>${esc(p.type)}</b><br>${prettyAddr(p.address)}<br>${badge(p.status)}<br>${(+p.miles).toFixed(1)} mi · applied ${fmtDate(p.applied)}<br><a href="${esc(p.url)}" target="_blank">Open on EPIC ↗</a>`);
+      .bindPopup(`<b>${esc(p.type)}</b><br>${prettyAddr(p.address)}<br>${badge(p.status)}<br>${fmtMi(p.dist)} from center · applied ${fmtDate(p.applied)}<br><a href="${esc(p.url)}" target="_blank" rel="noopener">Open on EPIC ↗</a>`);
   }
+  const pin = L.marker([S.center.lat, S.center.lon], { draggable: true, autoPan: true, title: 'Search center: drag to move', zIndexOffset: 1000 })
+    .addTo(layer).bindTooltip(esc(S.center.label) + '<br><span style="color:#666">Drag to move</span>', { direction: 'top', offset: [0, -36] });
+  pin.on('dragend', async e => {
+    const ll = e.target.getLatLng();
+    mapFitKey = `${ll.lat.toFixed(5)},${ll.lng.toFixed(5)},${S.radius}`;   // keep the view where the person dropped it
+    setCenter(ll.lat, ll.lng, 'Dropped pin');
+    const name = await placeName(ll.lat, ll.lng);
+    if (name && S.center.lat === ll.lat && S.center.lon === ll.lng) { S.center.label = 'Near ' + name; changed(); }
+  });
   // Size and frame the map only once its tab is laid out, or it frames a zero-size box (the whole world)
   requestAnimationFrame(() => {
     map.invalidateSize();
-    if (!mapFit && $('#map').clientWidth > 0) {
-      map.fitBounds(L.latLng(DATA.home.lat, DATA.home.lon).toBounds(DATA.radiusMiles * 1609.34 * 2));
-      mapFit = true;
+    const key = `${S.center.lat.toFixed(5)},${S.center.lon.toFixed(5)},${S.radius}`;
+    if (key !== mapFitKey && $('#map').clientWidth > 0) {
+      map.fitBounds(L.latLng(S.center.lat, S.center.lon).toBounds(S.radius * MI * 2.1));
+      mapFitKey = key;
     }
   });
 }
 
 function renderHeader() {
-  $('#sub').textContent = `${DATA.home.address} · ${DATA.radiusMiles} mile radius · Hawaiʻi County EPIC`;
+  $('#sub').textContent = `Hawaiʻi County building permits within ${S.radius} mi of ${S.center.label}`;
   const last = DATA.lastRun ? new Date(DATA.lastRun) : null;
   let html;
   if (DATA.running) html = `<div class="spinner"></div>Checking the county for updates…`;
@@ -303,19 +417,34 @@ function renderHeader() {
   $('#live').title = last ? 'Last checked ' + last.toLocaleString() : '';
 }
 
-function renderTiles() {
-  const wk = Date.now() - 7 * DAY, P = DATA.permits;
-  $('#t-new').textContent = P.filter(p => p.firstSeen && new Date(p.firstSeen) >= wk).length;
-  $('#t-chg').textContent = P.reduce((n, p) => n + changesOf(p).filter(c => new Date(c.at) >= wk).length, 0);
-  $('#t-open').textContent = P.filter(p => groupMatches.open(statusGroup(p.status))).length;
-  $('#t-all').textContent = P.length;
-  $('#t-rad').textContent = DATA.radiusMiles;
+function renderTiles(list) {
+  const wk = Date.now() - 7 * DAY;
+  $('#t-new').textContent = list.filter(p => p.firstSeen && new Date(p.firstSeen) >= wk).length;
+  $('#t-chg').textContent = list.reduce((n, p) => n + changesOf(p).filter(c => new Date(c.at) >= wk).length, 0);
+  $('#t-open').textContent = list.filter(p => ['blue', 'amber'].includes(statusGroup(p.status))).length;
+  $('#t-all').textContent = list.length;
+}
+
+function renderFilters(list) {
+  drawChips();
+  $('#center-now').textContent = S.center.label;
+  $('#center-home').hidden = !!S.center.isHome;
+  const any = S.kinds.size || S.statuses.size || $('#q').value.trim() || S.radius !== 10 || !S.center.isHome;
+  $('#clear').hidden = !any;
+  $('#match').textContent = `${list.length} of ${DATA.permits.length} tracked permits match.`;
+  // Warn when part of the search circle lies outside the area the tracker collects
+  const reach = miles(S.center, DATA.home) + S.radius;
+  const note = $('#cover-note');
+  note.hidden = reach <= DATA.radiusMiles + 0.05;
+  note.textContent = `Part of this area is more than ${DATA.radiusMiles} mi from ${DATA.home.address}, where the tracker collects permits, so permits there won't show up.`;
 }
 
 function render() {
   if (!DATA) return;
-  renderHeader(); renderTiles();
+  if (!S.center) S.center = homeCenter();
+  else if (!S.center.isHome && Math.abs(S.center.lat - DATA.home.lat) < 1e-6 && Math.abs(S.center.lon - DATA.home.lon) < 1e-6) S.center.isHome = true;
   const list = filtered();
+  renderHeader(); renderTiles(list); renderFilters(list);
   // keep any expanded cards open across live refreshes
   const open = [...document.querySelectorAll('details[open] dd')].map(d => d.textContent);
   if (view === 'activity') renderActivity(list);
@@ -339,15 +468,21 @@ function loadData() {
     s.remove();
     const d = window.PERMIT_DATA;
     if (d && (!DATA || d.generatedAt !== DATA.generatedAt)) { DATA = d; render(); }
-    else renderHeader();   // refresh the "updated X min ago" text
+    else if (DATA) renderHeader();   // refresh the "updated X min ago" text
   };
   s.onerror = () => { s.remove(); if (!DATA) $('#v-activity').innerHTML = '<div class="empty">No data yet. The tracker is running its first check.</div>'; };
   document.body.appendChild(s);
 }
 
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => show(t.dataset.tab));
-document.querySelectorAll('.tile').forEach(t => t.onclick = () => { $('#f-status').value = t.dataset.status || ''; show(t.dataset.go); });
-['#q', '#f-kind', '#f-status', '#f-dist'].forEach(s => $(s).addEventListener('input', render));
+document.querySelectorAll('.tile').forEach(t => t.onclick = () => {
+  S.statuses = new Set((t.dataset.status || '').split(',').filter(Boolean));
+  writeLink(); show(t.dataset.go);
+});
+$('#q').addEventListener('input', changed);
+$('#clear').addEventListener('click', () => {
+  S.kinds.clear(); S.statuses.clear(); S.radius = 10; $('#q').value = ''; S.center = homeCenter(); changed();
+});
 loadData();
 setInterval(loadData, 15000);
 </script>
