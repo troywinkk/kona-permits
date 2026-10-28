@@ -393,7 +393,7 @@ function renderMap(list) {
     mapFitKey = `${ll.lat.toFixed(5)},${ll.lng.toFixed(5)},${S.radius}`;   // keep the view where the person dropped it
     setCenter(ll.lat, ll.lng, 'Dropped pin');
     const name = await placeName(ll.lat, ll.lng);
-    if (name && S.center.lat === ll.lat && S.center.lon === ll.lng) { S.center.label = 'Near ' + name; changed(); }
+    if (name && S.center.lat === ll.lat && S.center.lon === ll.lng) { S.center.label = name; changed(); }
   });
   // Size and frame the map only once its tab is laid out, or it frames a zero-size box (the whole world)
   requestAnimationFrame(() => {
