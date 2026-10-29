@@ -135,8 +135,8 @@
         <input id="center-q" type="search" placeholder="Move to an address or place, e.g. 74-5587 Alapa St" aria-label="Move center to an address or place">
         <button class="btn primary" type="submit">Move</button>
       </form>
-      <button class="btn" id="center-home" type="button">Back to home</button>
     </div>
+    <div class="frow"><span class="flabel"></span><div class="chips" id="f-places" role="group" aria-label="Jump to a town"></div></div>
     <div class="frow"><span class="flabel"></span><span class="hint" id="center-msg">You can also drag the pin on the map to move the center.</span></div>
     <div class="frow"><span class="flabel">Within</span><div class="chips" id="f-radius" role="group" aria-label="Distance"></div></div>
     <div class="frow"><span class="flabel">Type</span><div class="chips" id="f-kind" role="group" aria-label="Permit type"></div></div>
@@ -152,7 +152,7 @@
     <div class="legend">
       <span style="--c:var(--blue)">In review</span><span style="--c:var(--amber)">Waiting on applicant</span>
       <span style="--c:var(--green)">Issued / approved</span><span style="--c:var(--gray)">Completed</span><span style="--c:var(--red)">Cancelled / expired</span>
-      <span class="ring" style="--c:var(--accent)">Your search area</span><span class="ring" style="--c:var(--muted)">Where permits are collected</span>
+      <span class="ring" style="--c:var(--accent)">Your search area</span><span class="ring" id="lg-collect" style="--c:var(--muted)">Where permits are collected</span>
     </div>
     <div id="map"></div>
   </section>
@@ -187,7 +187,13 @@ function kind(t) {
 const KINDS = [['newhome', 'New homes'], ['commercial', 'Commercial'], ['addition', 'Additions & alterations'], ['solar', 'Solar & water heaters'],
   ['electrical', 'Electrical / plumbing'], ['site', 'Grading, pools & site work'], ['other', 'Other']];
 const STATUSES = [['blue', 'In review'], ['amber', 'Waiting on applicant'], ['green', 'Issued / approved'], ['gray', 'Completed'], ['red', 'Cancelled / expired']];
-const RADII = [0.5, 1, 2, 5, 10];
+const RADII = [0.5, 1, 2, 5, 10, 25, Infinity];   // Infinity = the whole island
+const radiusLabel = r => r === Infinity ? 'Whole island' : `${r} mi`;
+const PLACES = [['Kailua-Kona', 19.6400, -155.9969], ['Waikoloa', 19.9255, -155.7887], ['Waimea', 20.0234, -155.6718],
+  ['Hilo', 19.7241, -155.0868], ['Pāhoa', 19.4936, -154.9454], ['Volcano', 19.4426, -155.2339], ['Nāʻālehu', 19.0645, -155.5865]];
+const ISLAND = [[18.90, -156.08], [20.28, -154.80]];
+const PAGE = 300;   // cards shown at a time; island-wide lists run into the thousands
+let shown = PAGE;
 
 // ---------- filter state (also kept in the page link, so a filtered view can be shared) ----------
 const S = { center: null, radius: 10, kinds: new Set(), statuses: new Set() };
@@ -196,7 +202,8 @@ const S = { center: null, radius: 10, kinds: new Set(), statuses: new Set() };
     const p = new URLSearchParams(location.search);
     const c = (p.get('c') || '').split(',').map(Number);
     if (c.length === 2 && c.every(Number.isFinite)) S.center = { lat: c[0], lon: c[1], label: p.get('l') || 'Selected point' };
-    if (RADII.includes(+p.get('r'))) S.radius = +p.get('r');
+    if (p.get('r') === 'all') S.radius = Infinity;
+    else if (RADII.includes(+p.get('r'))) S.radius = +p.get('r');
     (p.get('t') || '').split(',').filter(k => KINDS.some(x => x[0] === k)).forEach(k => S.kinds.add(k));
     (p.get('s') || '').split(',').filter(k => STATUSES.some(x => x[0] === k)).forEach(k => S.statuses.add(k));
     if (p.get('q')) $('#q').value = p.get('q');
@@ -205,7 +212,7 @@ const S = { center: null, radius: 10, kinds: new Set(), statuses: new Set() };
 function writeLink() {
   const p = new URLSearchParams();
   if (S.center && !S.center.isHome) { p.set('c', S.center.lat.toFixed(5) + ',' + S.center.lon.toFixed(5)); p.set('l', S.center.label); }
-  if (S.radius !== 10) p.set('r', S.radius);
+  if (S.radius !== 10) p.set('r', S.radius === Infinity ? 'all' : S.radius);
   if (S.kinds.size) p.set('t', [...S.kinds].join(','));
   if (S.statuses.size) p.set('s', [...S.statuses].join(','));
   if ($('#q').value.trim()) p.set('q', $('#q').value.trim());
@@ -289,14 +296,21 @@ function drawChips() {
     return b;
   };
   const toggle = (set, key) => () => { set.has(key) ? set.delete(key) : set.add(key); changed(); };
-  $('#f-radius').replaceChildren(...RADII.map(r => chip(`${r} mi`, S.radius === r, () => { S.radius = r; changed(); })));
+  $('#f-radius').replaceChildren(...RADII.map(r => chip(radiusLabel(r), S.radius === r, () => { S.radius = r; changed(); })));
+  const at = (lat, lon) => Math.abs(S.center.lat - lat) < 1e-4 && Math.abs(S.center.lon - lon) < 1e-4;
+  $('#f-places').replaceChildren(document.createTextNode('Jump to:'),
+    chip('Home', !!S.center.isHome, () => { const h = homeCenter(); setCenter(h.lat, h.lon, h.label, true); }),
+    ...PLACES.map(([name, lat, lon]) => chip(name, !S.center.isHome && at(lat, lon), () => setCenter(lat, lon, name))));
   $('#f-kind').replaceChildren(chip('All types', !S.kinds.size, () => { S.kinds.clear(); changed(); }),
     ...KINDS.map(([k, label]) => chip(label, S.kinds.has(k), toggle(S.kinds, k))));
   $('#f-status').replaceChildren(chip('Any status', !S.statuses.size, () => { S.statuses.clear(); changed(); }),
     ...STATUSES.map(([k, label]) => chip(label, S.statuses.has(k), toggle(S.statuses, k), k)));
 }
 
-function changed() { writeLink(); render(); }
+function changed() { shown = PAGE; writeLink(); render(); }
+function more(total) {
+  return total > shown ? `<p style="text-align:center"><button class="btn" type="button" onclick="shown += PAGE; render()">Show ${Math.min(PAGE, total - shown)} more of ${total - shown} remaining</button></p>` : '';
+}
 
 // ---------- moving the center ----------
 function setCenter(lat, lon, label, isHome) {
@@ -333,7 +347,6 @@ $('#center-form').addEventListener('submit', async e => {
     setCenter(hit.lat, hit.lon, hit.label);
   } catch (err) { $('#center-msg').textContent = 'The address lookup is not responding. Try again, or drag the pin on the map.'; }
 });
-$('#center-home').addEventListener('click', () => { const h = homeCenter(); setCenter(h.lat, h.lon, h.label, true); });
 
 // ---------- views ----------
 function renderActivity(list) {
@@ -347,20 +360,20 @@ function renderActivity(list) {
   events.sort((a, b) => new Date(b.at) - new Date(a.at));
   if (!events.length) { $('#v-activity').innerHTML = '<div class="empty">No new permits or status changes in the last 14 days match these filters.</div>'; return; }
   let html = `<p class="count">${events.length} events in the last 14 days</p>`, lastDay = '';
-  for (const e of events) {
+  for (const e of events.slice(0, shown)) {
     const dl = dayLabel(e.at);
     if (dl !== lastDay) { html += `<div class="day">${dl}</div>`; lastDay = dl; }
     let c = card(e.p, e.note);
     if (e.change) c = c.replace('<div class="meta">', `<div class="change">${badge(e.change.from)}<span class="arrow">→</span>${badge(e.change.to)}</div><div class="meta">`);
     html += c;
   }
-  $('#v-activity').innerHTML = `<div class="list">${html}</div>`;
+  $('#v-activity').innerHTML = `<div class="list">${html}</div>${more(events.length)}`;
 }
 
 function renderAll(list) {
   const sorted = [...list].sort((a, b) => new Date(b.applied) - new Date(a.applied));
   $('#v-all').innerHTML = sorted.length
-    ? `<p class="count">${sorted.length} permits, newest first</p><div class="list">${sorted.map(p => card(p)).join('')}</div>`
+    ? `<p class="count">${sorted.length} permits, newest first</p><div class="list">${sorted.slice(0, shown).map(p => card(p)).join('')}</div>${more(sorted.length)}`
     : '<div class="empty">No permits match these filters.</div>';
 }
 
@@ -369,7 +382,8 @@ function renderMap(list) {
   const css = getComputedStyle(document.documentElement);
   const color = g => css.getPropertyValue('--' + g).trim();
   if (!map) {
-    map = L.map('map').setView([S.center.lat, S.center.lon], 12);
+    // Canvas dots stay fast with thousands of permits on screen
+    map = L.map('map', { preferCanvas: true }).setView([S.center.lat, S.center.lon], 12);
     // Esri basemaps: unlike OpenStreetMap's servers, they serve tiles to pages opened from a local file
     const esri = name => L.tileLayer(`https://server.arcgisonline.com/ArcGIS/rest/services/${name}/MapServer/tile/{z}/{y}/{x}`,
       { maxZoom: 19, referrerPolicy: 'no-referrer', attribution: 'Tiles © Esri' });
@@ -379,10 +393,11 @@ function renderMap(list) {
   if (layer) layer.remove();
   layer = L.layerGroup().addTo(map);
   // Where the tracker collects permits, then the area being searched
-  L.circle([DATA.home.lat, DATA.home.lon], { radius: DATA.radiusMiles * MI, color: color('muted'), weight: 1, fill: false, dashArray: '2 5', interactive: false }).addTo(layer);
-  L.circle([S.center.lat, S.center.lon], { radius: S.radius * MI, color: color('accent'), weight: 2, fillColor: color('accent'), fillOpacity: .05, dashArray: '6 5', interactive: false }).addTo(layer);
+  if (!DATA.islandWide) L.circle([DATA.home.lat, DATA.home.lon], { radius: DATA.radiusMiles * MI, color: color('muted'), weight: 1, fill: false, dashArray: '2 5', interactive: false }).addTo(layer);
+  if (S.radius !== Infinity) L.circle([S.center.lat, S.center.lon], { radius: S.radius * MI, color: color('accent'), weight: 2, fillColor: color('accent'), fillOpacity: .05, dashArray: '6 5', interactive: false }).addTo(layer);
+  const dot = list.length > 1500 ? 4 : 6;
   for (const p of list) {
-    L.circleMarker([p.lat, p.lon], { radius: 6, color: '#fff', weight: 1, fillColor: color(statusGroup(p.status)), fillOpacity: .9 })
+    L.circleMarker([p.lat, p.lon], { radius: dot, color: '#fff', weight: 1, fillColor: color(statusGroup(p.status)), fillOpacity: .9 })
       .addTo(layer)
       .bindPopup(`<b>${esc(p.type)}</b><br>${prettyAddr(p.address)}<br>${badge(p.status)}<br>${fmtMi(p.dist)} from center · applied ${fmtDate(p.applied)}<br><a href="${esc(p.url)}" target="_blank" rel="noopener">Open on EPIC ↗</a>`);
   }
@@ -400,14 +415,15 @@ function renderMap(list) {
     map.invalidateSize();
     const key = `${S.center.lat.toFixed(5)},${S.center.lon.toFixed(5)},${S.radius}`;
     if (key !== mapFitKey && $('#map').clientWidth > 0) {
-      map.fitBounds(L.latLng(S.center.lat, S.center.lon).toBounds(S.radius * MI * 2.1));
+      map.fitBounds(S.radius === Infinity ? ISLAND : L.latLng(S.center.lat, S.center.lon).toBounds(S.radius * MI * 2.1));
       mapFitKey = key;
     }
   });
 }
 
 function renderHeader() {
-  $('#sub').textContent = `Hawaiʻi County building permits within ${S.radius} mi of ${S.center.label}`;
+  $('#sub').textContent = S.radius === Infinity ? 'Hawaiʻi County building permits across the whole Big Island'
+    : `Hawaiʻi County building permits within ${S.radius} mi of ${S.center.label}`;
   const last = DATA.lastRun ? new Date(DATA.lastRun) : null;
   let html;
   if (DATA.running) html = `<div class="spinner"></div>Checking the county for updates…`;
@@ -428,14 +444,14 @@ function renderTiles(list) {
 function renderFilters(list) {
   drawChips();
   $('#center-now').textContent = S.center.label;
-  $('#center-home').hidden = !!S.center.isHome;
   const any = S.kinds.size || S.statuses.size || $('#q').value.trim() || S.radius !== 10 || !S.center.isHome;
   $('#clear').hidden = !any;
   $('#match').textContent = `${list.length} of ${DATA.permits.length} tracked permits match.`;
   // Warn when part of the search circle lies outside the area the tracker collects
   const reach = miles(S.center, DATA.home) + S.radius;
   const note = $('#cover-note');
-  note.hidden = reach <= DATA.radiusMiles + 0.05;
+  note.hidden = DATA.islandWide || reach <= DATA.radiusMiles + 0.05;
+  $('#lg-collect').hidden = !!DATA.islandWide;
   note.textContent = `Part of this area is more than ${DATA.radiusMiles} mi from ${DATA.home.address}, where the tracker collects permits, so permits there won't show up.`;
 }
 
@@ -460,18 +476,27 @@ function show(v) {
   render();
 }
 
-// ---------- live reload of data.js ----------
-function loadData() {
+// ---------- live reload: poll the tiny version.js, fetch data.js only when it changes ----------
+function loadScript(name, onload, onerror) {
   const s = document.createElement('script');
-  s.src = 'data.js?t=' + Date.now();
-  s.onload = () => {
-    s.remove();
+  s.src = name + '?t=' + Date.now();
+  s.onload = () => { s.remove(); onload(); };
+  s.onerror = () => { s.remove(); if (onerror) onerror(); };
+  document.body.appendChild(s);
+}
+function loadFull() {
+  loadScript('data.js', () => {
     const d = window.PERMIT_DATA;
     if (d && (!DATA || d.generatedAt !== DATA.generatedAt)) { DATA = d; render(); }
-    else if (DATA) renderHeader();   // refresh the "updated X min ago" text
-  };
-  s.onerror = () => { s.remove(); if (!DATA) $('#v-activity').innerHTML = '<div class="empty">No data yet. The tracker is running its first check.</div>'; };
-  document.body.appendChild(s);
+    else if (DATA) renderHeader();
+  }, () => { if (!DATA) $('#v-activity').innerHTML = '<div class="empty">No data yet. The tracker is running its first check.</div>'; });
+}
+function loadData() {
+  if (!DATA) return loadFull();
+  loadScript('version.js', () => {
+    if (window.PERMIT_VERSION !== DATA.generatedAt) loadFull();
+    else renderHeader();   // refresh the "updated X min ago" text
+  }, loadFull);   // no version file yet: fall back to the data file
 }
 
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => show(t.dataset.tab));
